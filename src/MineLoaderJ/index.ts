@@ -5,6 +5,7 @@ import Method from '../Java/Method'
 import _ChatColor from './bukkit/ChatColor'
 import _Logger, { Logger } from './Logger'
 import { inspect } from 'util'
+import { dirname } from 'path'
 import { EventEmitter } from 'events'
 
 
@@ -23,6 +24,8 @@ export class MineLoaderJ extends EventEmitter {
   consoleSender: JavaObject
   ConsoleSender: JavaClass
   sendMessage: Method
+  static jarPath: string = __UTIL_getPath()
+  static path: string = dirname(MineLoaderJ.jarPath)
 
   logger: _Logger = new Logger
 

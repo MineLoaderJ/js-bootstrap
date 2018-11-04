@@ -208,3 +208,8 @@ declare function __MINE_LOADER_J_logFINEST(msg: string): void
  * @param msg Message to broadcast.
  */
 declare function __MINE_LOADER_J_broadcastMessage(msg: string): void
+
+/**
+ * @description Get plugin jar path.
+ */
+declare function __UTIL_getPath(): string
