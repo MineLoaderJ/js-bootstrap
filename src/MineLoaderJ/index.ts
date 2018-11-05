@@ -3,16 +3,24 @@ import JavaClass from '../Java/JavaClass'
 import Pointer from '../Pointer'
 import Method from '../Java/Method'
 import _ChatColor from './bukkit/ChatColor'
-import _Logger, { Logger } from './Logger'
+import _Logger from './Logger'
 import { inspect } from 'util'
-import { dirname } from 'path'
+import promisify from '../helpers/promise'
+import { dirname, join } from 'path'
 import { EventEmitter } from 'events'
+import * as assert from 'assert'
+import * as fs from 'fs'
 
 
 declare global {
   // Emit `enable` event on next tick when loaded
   const onDisable: Function  // onDisable hook
   const __INSPECT: Function
+}
+interface Plugin {
+  init(instance: MineLoaderJ, logger: _Logger): void
+  name: string
+  logger: _Logger
 }
 export class MineLoaderJ extends EventEmitter {
   static ChatColor: typeof _ChatColor = _ChatColor
@@ -26,11 +34,15 @@ export class MineLoaderJ extends EventEmitter {
   sendMessage: Method
   static jarPath: string = __UTIL_getPath()
   static path: string = dirname(MineLoaderJ.jarPath)
+  static pluginDirectoryName: string = 'MineLoaderJ'
+  static pluginPath: string = join(MineLoaderJ.path, MineLoaderJ.pluginDirectoryName)
 
-  logger: _Logger = new Logger
+  logger: _Logger = new _Logger
 
   static ENABLE: string = 'enable'
   static DISABLE: string = 'disable'
+
+  plugins: Plugin[] = []
   
   /**
    * @description Don't instantiate this class manually!
@@ -65,6 +77,23 @@ export class MineLoaderJ extends EventEmitter {
       this.sendMessage = this.ConsoleSender.methods.sendMessage
     }
 
+    this.registerGlobalFunctions()
+
+    // TODO: Load modules
+    this.loadPlugins()
+
+    const handler = MineLoaderJ.getOnUncaughtErrorHandler(this)
+    process.on('uncaughtException', handler)
+    process.on('unhandledRejection', handler)
+  }
+
+  private static getOnUncaughtErrorHandler(self: MineLoaderJ) {
+    return function onUncaughtError(err: Error) {
+      self.logger.err(`An error/rejection has occurred and was not caught: ${err && (err.stack || err.message) || 'unknown error'}`)
+    }
+  }
+
+  private registerGlobalFunctions() {
     // Register `__INSPECT`
     function __INSPECT(obj: any, colors: boolean) {
       return inspect(obj, { colors: colors, maxArrayLength: 20 })
@@ -88,10 +117,47 @@ export class MineLoaderJ extends EventEmitter {
       configurable: true,
       value: onDisable
     })
+  }
 
-    // Initialize logger
-
-    // TODO: Load modules
+  private async loadPlugins(callback?: () => void) {
+    const readdir = promisify(fs.readdir)
+    const mkdir = promisify(fs.mkdir)
+    const stat = promisify(fs.stat)
+    let pluginNames: string[]
+    this.logger.info('Loading js plugins...')
+    try {
+      let info = await stat(MineLoaderJ.pluginPath)
+      assert(info && info.isDirectory())
+    } catch(err) {
+      // Doesn't exist or is not a directory
+      this.logger.info('Plugin directory doesn\'t exist, creating...')
+      try {
+        await mkdir(MineLoaderJ.pluginPath)
+      } catch(err) {
+        this.logger.err(`Unable to create a directory for plugins: ${err && (err.stack || err.msg) || 'unknonw error'}`)
+        return
+      }
+    }
+    try {
+      pluginNames = await readdir(MineLoaderJ.pluginPath)
+    } catch(err) {
+      this.logger.err(`Unable to open plugin directory: ${err && (err.stack || err.msg) || 'unknonw error'}`)
+      return
+    }
+    for(let pluginName of pluginNames) {
+      let plugin: Plugin
+      try {
+        plugin = require(join(MineLoaderJ.pluginPath, pluginName))
+        assert(plugin.name)
+        plugin.logger = new _Logger(plugin.name)
+        plugin.init(this, plugin.logger)  // Plugins must listen to `enable` and `disable` events
+        this.plugins.push(plugin)
+        this.logger.info(`\u001b[36mPlugin loaded: ${plugin.name}\u001b[0m`)
+      } catch(err) {
+        this.logger.warn(`Skipped file/directory: ${pluginName}`)
+      }
+    }
+    if(!this.plugins.length) this.logger.warn('No js plugins are loaded')
 
     // Emit `enable` event
     this.emit(MineLoaderJ.ENABLE)

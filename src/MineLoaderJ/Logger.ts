@@ -11,7 +11,7 @@ export class Logger {
    * @param messages Logging message.
    */
   severe(...messages) {
-    __MINE_LOADER_J_logSEVERE(this.prefix + messages.join(' '))
+    __MINE_LOADER_J_logSEVERE(`\u001b[31m${this.prefix}${messages.join(' ')}\u001b[0m`)
   }
 
   /**
@@ -19,7 +19,7 @@ export class Logger {
    * @param messages Logging message.
    */
   err(...messages) {
-    __MINE_LOADER_J_logSEVERE(this.prefix + messages.join(' '))
+    __MINE_LOADER_J_logSEVERE(`\u001b[31m${this.prefix}${messages.join(' ')}\u001b[0m`)
   }
 
   /**
@@ -27,7 +27,7 @@ export class Logger {
    * @param messages Logging message.
    */
   error(...messages) {
-    __MINE_LOADER_J_logSEVERE(this.prefix + messages.join(' '))
+    __MINE_LOADER_J_logSEVERE(`\u001b[31m${this.prefix}${messages.join(' ')}\u001b[0m`)
   }
 
   /**
@@ -35,7 +35,7 @@ export class Logger {
    * @param messages Logging message.
    */
   warning(...messages) {
-    __MINE_LOADER_J_logWARNING(this.prefix + messages.join(' '))
+    __MINE_LOADER_J_logWARNING(`\u001b[33m${this.prefix}${messages.join(' ')}\u001b[0m`)
   }
 
   /**
@@ -43,7 +43,7 @@ export class Logger {
    * @param messages Logging message.
    */
   warn(...messages) {
-    __MINE_LOADER_J_logWARNING(this.prefix + messages.join(' '))
+    __MINE_LOADER_J_logWARNING(`\u001b[33m${this.prefix}${messages.join(' ')}\u001b[0m`)
   }
 
   /**

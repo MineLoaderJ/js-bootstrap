@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     //   "module": "esnext",
-      "lib": ["es5"],
+      "lib": ["es5", "es2015.promise"],
       "target": "es5",
       "downlevelIteration": true,
       "noImplicitAny": false,
