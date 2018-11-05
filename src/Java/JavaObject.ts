@@ -12,6 +12,10 @@ export class JavaObject {
 
   static classLoader: (className: string) => JavaClass  // Should be initialized by `JavaClass` or in outer scope
 
+  /**
+   * @description `JavaObject` constructor, returns an uninitialized `JavaObject`.
+   * @param param0 Name and pointer of the object.
+   */
   constructor({ name, pointer } : { name: string, pointer: Pointer }) {
     this.name = name || ''
     this.pointer = pointer || Pointer.NULL

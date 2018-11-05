@@ -16,11 +16,23 @@ declare global {
   // Emit `enable` event on next tick when loaded
   const onDisable: Function  // onDisable hook
   const __INSPECT: Function
+  const onCommand: Function
 }
-interface Plugin {
+export interface CommandDescription {
+  description: string
+  usage: string
+  aliases: string[]
+  onCommand: (sender: JavaObject & { sendMessage: (...args: string[]) => void }, commandName: string, args: string[]) => boolean
+  plugin?: Plugin
+}
+export interface CommandDescriptions {
+  [commandName: string]: CommandDescription
+}
+export interface Plugin {
   init(instance: MineLoaderJ, logger: _Logger): void
   name: string
   logger: _Logger
+  commands: CommandDescriptions
 }
 export class MineLoaderJ extends EventEmitter {
   static ChatColor: typeof _ChatColor = _ChatColor
@@ -41,8 +53,10 @@ export class MineLoaderJ extends EventEmitter {
 
   static ENABLE: string = 'enable'
   static DISABLE: string = 'disable'
+  // static COMMAND: string = 'command'
 
   plugins: Plugin[] = []
+  commands: CommandDescriptions = {}
   
   /**
    * @description Don't instantiate this class manually!
@@ -105,8 +119,8 @@ export class MineLoaderJ extends EventEmitter {
       value: __INSPECT
     })
 
-    // Register `onDisable` hook
     const self: MineLoaderJ = this
+    // Register `onDisable` hook
     function onDisable() {
       self.emit(MineLoaderJ.DISABLE)
       self.logger.info('`disable` event emitted')
@@ -116,6 +130,46 @@ export class MineLoaderJ extends EventEmitter {
       writable: false,
       configurable: true,
       value: onDisable
+    })
+
+    // Register `onCommand` hook
+    function onCommand(senderPointer: RawPointer, commandName: string, args: string[]) {
+      if(!(commandName in self.commands)) return
+      const name: string = `commandSender@${senderPointer}`
+      let sender: any = new JavaObject({
+        name,
+        pointer: new Pointer(senderPointer, name)
+      }).init()
+      let sendMessage: Method | Method[] = sender.getClass().methods.sendMessage
+      if(sendMessage instanceof Array) {
+        for(let m of sendMessage) {
+          if(m.argumentTypes.length == 1 && m.argumentTypes[0] == 'java.lang.String') {
+            sendMessage = m
+            break
+          }
+        }
+      }
+      function _sendMessage(...args: string[]) {
+        (sendMessage as Method).invoke(sender, [ args.join(' ') ])
+      }
+      sender.sendMessage = _sendMessage
+      if(!self.commands[commandName].onCommand(sender, commandName, args)) {
+        (sender.sendMessage as typeof _sendMessage)(`Usage: ${self.commands[commandName].usage}`)
+      }
+      // self.emit(MineLoaderJ.COMMAND, sender as JavaObject & { sendMessage(...args: string[]): void }, commandName, args, (successful: boolean) => {
+      //   // onFinish handler
+      //   if(!successful) {
+      //     (sender.sendMessage as typeof _sendMessage)(`Usage: ${self.commands[commandName].usage}`)
+      //   }
+      // })
+      sender.destroy()
+      // self.logger.info('`command` event emitted')
+    }
+    Object.defineProperty(global, 'onCommand', {
+      enumerable: true,
+      writable: false,
+      configurable: true,
+      value: onCommand
     })
   }
 
@@ -134,14 +188,14 @@ export class MineLoaderJ extends EventEmitter {
       try {
         await mkdir(MineLoaderJ.pluginPath)
       } catch(err) {
-        this.logger.err(`Unable to create a directory for plugins: ${err && (err.stack || err.msg) || 'unknonw error'}`)
+        this.logger.err(`Unable to create a directory for plugins: ${err && (err.stack || err.message) || 'unknonw error'}`)
         return
       }
     }
     try {
       pluginNames = await readdir(MineLoaderJ.pluginPath)
     } catch(err) {
-      this.logger.err(`Unable to open plugin directory: ${err && (err.stack || err.msg) || 'unknonw error'}`)
+      this.logger.err(`Unable to open plugin directory: ${err && (err.stack || err.message) || 'unknonw error'}`)
       return
     }
     for(let pluginName of pluginNames) {
@@ -151,11 +205,30 @@ export class MineLoaderJ extends EventEmitter {
         plugin = require(join(MineLoaderJ.pluginPath, pluginName))
         assert(plugin.name)
         plugin.logger = new _Logger(plugin.name)
-        plugin.init(this, plugin.logger)  // Plugins must listen to `enable` and `disable` events
+        plugin.init(this, plugin.logger)  // Plugins must listen to `enable` and `disable` events; plugins must resolve command conflict
+        // Register commands
+        let commands: string[]
+        if(plugin.commands && (commands = Object.keys(plugin.commands)).length) {
+          for(let command of commands) {
+            if(typeof plugin.commands[command].onCommand != 'function') {
+              this.logger.err(`No \`onCommand\` handler for command: ${command}`)
+              throw new Error('No \`onCommand\` handler')
+            }
+            if(command in this.commands) {
+              this.logger.err(`Conflict command: ${command}`)
+              throw new Error('Conflict command')
+            }
+          }
+          for(let command of commands) {
+            plugin.commands[command].plugin = plugin  // Circular
+            this.commands[command] = plugin.commands[command]
+          }
+        }
         this.plugins.push(plugin)
         this.logger.info(`\u001b[36mPlugin loaded: ${plugin.name}\u001b[0m`)
       } catch(err) {
-        this.logger.warn(`Skipped file/directory: ${pluginName}`)
+        this.logger.warn(`Skipped file/directory: ${pluginName} (${(err as Error).name}:${(err as Error).message})`)
+        this.logger.finer(`Reason ${err && (err.stack || err.message) || 'unknown'}`)
       }
     }
     if(!this.plugins.length) this.logger.warn('No js plugins are loaded')
