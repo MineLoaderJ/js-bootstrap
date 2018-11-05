@@ -145,6 +145,7 @@ export class MineLoaderJ extends EventEmitter {
       return
     }
     for(let pluginName of pluginNames) {
+      if(pluginName == 'node_modules') continue
       let plugin: Plugin
       try {
         plugin = require(join(MineLoaderJ.pluginPath, pluginName))
