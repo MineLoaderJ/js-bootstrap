@@ -80,6 +80,7 @@ export class Method extends JavaObject {
         case 'boolean': return arg
         default: {
           assert(arg instanceof JavaObject && arg.pointer.pointer > 0, `Invalid argument type (index: ${index})`)
+          rawIntMap[index] = false
           return arg.pointer.pointer
         }
       }

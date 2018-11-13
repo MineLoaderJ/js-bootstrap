@@ -10,6 +10,10 @@ import { dirname, join } from 'path'
 import { EventEmitter } from 'events'
 import * as assert from 'assert'
 import * as fs from 'fs'
+import { CommandSender } from './bukkit/command/CommandSender'
+import { Player } from './bukkit/entity/Player'
+import * as bukkit from './bukkit'
+import * as helpers from './helpers'
 
 
 declare global {
@@ -22,7 +26,7 @@ export interface CommandDescription {
   description: string
   usage: string
   aliases: string[]
-  onCommand: (sender: JavaObject & { sendMessage: (...args: string[]) => void }, commandName: string, args: string[]) => boolean
+  onCommand: (sender: CommandSender, commandName: string, args: string[]) => boolean
   plugin?: Plugin
 }
 export interface CommandDescriptions {
@@ -36,6 +40,8 @@ export interface Plugin {
 }
 export class MineLoaderJ extends EventEmitter {
   static ChatColor: typeof _ChatColor = _ChatColor
+  static bukkit = bukkit
+  static helpers = helpers
   static Logger: typeof _Logger = _Logger
   static instance: MineLoaderJ
   pluginInstance: JavaObject
@@ -44,7 +50,7 @@ export class MineLoaderJ extends EventEmitter {
   consoleSender: JavaObject
   ConsoleSender: JavaClass
   sendMessage: Method
-  static jarPath: string = __UTIL_getPath()
+  static jarPath: string = process.platform == 'darwin' ? join('/', __UTIL_getPath()) : __UTIL_getPath()
   static path: string = dirname(MineLoaderJ.jarPath)
   static pluginDirectoryName: string = 'MineLoaderJ'
   static pluginPath: string = join(MineLoaderJ.path, MineLoaderJ.pluginDirectoryName)
@@ -135,6 +141,7 @@ export class MineLoaderJ extends EventEmitter {
     // Register `onCommand` hook
     function onCommand(senderPointer: RawPointer, commandName: string, args: string[]) {
       if(!(commandName in self.commands)) return
+      /*
       const name: string = `commandSender@${senderPointer}`
       let sender: any = new JavaObject({
         name,
@@ -153,8 +160,23 @@ export class MineLoaderJ extends EventEmitter {
         (sendMessage as Method).invoke(sender, [ args.join(' ') ])
       }
       sender.sendMessage = _sendMessage
+      */
+      const name: string = `commandSender@${senderPointer}`
+      let sender: CommandSender
+      if(__REFLECTOR_getTypeNameOfObject(senderPointer, '').match(/Player$/)) {
+        const _name: string = `player@${senderPointer}`
+        sender = new Player({
+          name,
+          pointer: new Pointer(senderPointer, name)
+        })
+      } else {
+        sender = new CommandSender({
+          name,
+          pointer: new Pointer(senderPointer, name)
+        })
+      }
       if(!self.commands[commandName].onCommand(sender, commandName, args)) {
-        (sender.sendMessage as typeof _sendMessage)(`Usage: ${self.commands[commandName].usage}`)
+        sender.sendMessage(`Usage: ${self.commands[commandName].usage}`)
       }
       // self.emit(MineLoaderJ.COMMAND, sender as JavaObject & { sendMessage(...args: string[]): void }, commandName, args, (successful: boolean) => {
       //   // onFinish handler
